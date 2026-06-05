@@ -573,41 +573,26 @@
 <script>
 
 // ── API HELPER (JSONP para evitar CORS con Apps Script) ──
+// ── API HELPER (fetch) ──
 var API_URL = 'https://timko-proxy.facundofrancesio.workers.dev';
-var _cbCount = 0;
 
 function api(accion, params, onSuccess, onError) {
-  var cbName = '_cb' + (++_cbCount) + '_' + Date.now();
-  var url = API_URL + '?accion=' + encodeURIComponent(accion) + '&callback=' + cbName;
+  var url = API_URL + '?accion=' + encodeURIComponent(accion);
   if (params) Object.keys(params).forEach(function(k) {
     var v = params[k];
     url += '&' + encodeURIComponent(k) + '=' + encodeURIComponent(
       typeof v === 'object' ? JSON.stringify(v) : String(v)
     );
   });
-  var timeout = setTimeout(function() {
-    delete window[cbName];
-    var s = document.getElementById(cbName + '-s');
-    if (s) s.parentNode.removeChild(s);
-    onError({message: 'Timeout — revisá tu conexión'});
-  }, 20000);
-  window[cbName] = function(data) {
-    clearTimeout(timeout);
-    delete window[cbName];
-    var s = document.getElementById(cbName + '-s');
-    if (s) s.parentNode.removeChild(s);
-    if (data && data.error) onError({message: data.error});
-    else onSuccess(data);
-  };
-  var script = document.createElement('script');
-  script.id = cbName + '-s';
-  script.src = url;
-  script.onerror = function() {
-    clearTimeout(timeout);
-    delete window[cbName];
-    onError({message: 'Error de conexión con el servidor'});
-  };
-  document.head.appendChild(script);
+  fetch(url)
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data && data.error) onError({ message: data.error });
+      else onSuccess(data);
+    })
+    .catch(function(e) {
+      onError({ message: 'Error de conexión con el servidor' });
+    });
 }
 
 function apiPost(accion, params, onSuccess, onError) {
