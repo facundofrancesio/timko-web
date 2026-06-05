@@ -585,13 +585,19 @@ function api(accion, params, onSuccess, onError) {
     );
   });
   fetch(url)
-    .then(function(r) { return r.json(); })
+    .then(function(r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    })
     .then(function(data) {
-      if (data && data.error) onError({ message: data.error });
-      else onSuccess(data);
+      if (data && (data.error || data.success === false)) {
+        onError({ message: data.error || 'Error del servidor' });
+      } else {
+        onSuccess(data);
+      }
     })
     .catch(function(e) {
-      onError({ message: 'Error de conexión con el servidor' });
+      onError({ message: e.message || 'Error de conexión con el servidor' });
     });
 }
 
