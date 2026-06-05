@@ -572,43 +572,48 @@
 
 <script>
 
-// ── API HELPER (fetch en vez de google.script.run) ──
+// ── API HELPER (JSONP para evitar CORS con Apps Script) ──
 var API_URL = 'https://script.google.com/macros/s/AKfycbz-bA9yFTIHoqcQ-o1V2McqPVig3kLI9RmZW662aJbxYeZnvNLjB_AUdozb0qdKQmhy9Q/exec';
+var _cbCount = 0;
 
 function api(accion, params, onSuccess, onError) {
-  var url = API_URL + '?accion=' + encodeURIComponent(accion);
-  if (params) {
-    Object.keys(params).forEach(function(k) {
-      var v = params[k];
-      url += '&' + encodeURIComponent(k) + '=' + encodeURIComponent(
-        typeof v === 'object' ? JSON.stringify(v) : String(v)
-      );
-    });
-  }
-  fetch(url)
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-      if (data.error) { onError({message: data.error}); }
-      else { onSuccess(data); }
-    })
-    .catch(function(err) { onError({message: err.message || 'Error de conexión'}); });
+  var cbName = '_cb' + (++_cbCount) + '_' + Date.now();
+  var url = API_URL + '?accion=' + encodeURIComponent(accion) + '&callback=' + cbName;
+  if (params) Object.keys(params).forEach(function(k) {
+    var v = params[k];
+    url += '&' + encodeURIComponent(k) + '=' + encodeURIComponent(
+      typeof v === 'object' ? JSON.stringify(v) : String(v)
+    );
+  });
+  var timeout = setTimeout(function() {
+    delete window[cbName];
+    var s = document.getElementById(cbName + '-s');
+    if (s) s.parentNode.removeChild(s);
+    onError({message: 'Timeout — revisá tu conexión'});
+  }, 20000);
+  window[cbName] = function(data) {
+    clearTimeout(timeout);
+    delete window[cbName];
+    var s = document.getElementById(cbName + '-s');
+    if (s) s.parentNode.removeChild(s);
+    if (data && data.error) onError({message: data.error});
+    else onSuccess(data);
+  };
+  var script = document.createElement('script');
+  script.id = cbName + '-s';
+  script.src = url;
+  script.onerror = function() {
+    clearTimeout(timeout);
+    delete window[cbName];
+    onError({message: 'Error de conexión con el servidor'});
+  };
+  document.head.appendChild(script);
 }
 
 function apiPost(accion, params, onSuccess, onError) {
-  params = params || {};
-  params.accion = accion;
-  fetch(API_URL, {
-    method: 'POST',
-    headers: {'Content-Type': 'text/plain'},
-    body: JSON.stringify(params)
-  })
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-      if (data.error) { onError({message: data.error}); }
-      else { onSuccess(data); }
-    })
-    .catch(function(err) { onError({message: err.message || 'Error de conexión'}); });
+  api(accion, params, onSuccess, onError);
 }
+
 
 // ── ESTADO ──
 var dI=null,dS=0,cI=null,cSt=null,vMap={};
